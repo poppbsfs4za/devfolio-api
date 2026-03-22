@@ -1,5 +1,26 @@
 # Devfolio API
 
+A personal developer platform API built with:
+
+- Go (Fiber)
+- Clean Architecture
+- PostgreSQL
+- Docker
+- Swagger
+- CI (GitHub Actions)
+
+## Run locally
+
+make up
+
+## Run migration
+
+make migrate-up
+
+## Build
+
+make docker-build
+
 A clean-architecture backend starter for a personal developer platform. It supports profile data, projects, tags, blog posts, and admin authentication so you can publish blog content without redeploying the application for each new post.
 
 ## Stack
@@ -108,3 +129,6 @@ curl -X POST http://localhost:8080/api/v1/admin/posts \
 4. Add refresh tokens or session management.
 5. Add Swagger or OpenAPI.
 6. Add deploy workflow after CI.
+
+
+
