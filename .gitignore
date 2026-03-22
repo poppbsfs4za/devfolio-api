@@ -1,0 +1,16 @@
+# binary
+bin/
+*.exe
+*.out
+
+# env
+.env
+
+# mac
+.DS_Store
+
+# go
+vendor/
+
+# logs
+*.log
