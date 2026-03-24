@@ -3,15 +3,16 @@ name: CI
 on:
   push:
     branches:
-      - main
-      - develop
-      - "feature/**"
+      - '**'
   pull_request:
+    branches:
+      - main
 
 jobs:
   ci:
     name: Test, Build, and Validate
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -30,7 +31,7 @@ jobs:
 
     env:
       APP_ENV: test
-      PORT: 8080
+      APP_PORT: 8080
       DB_HOST: localhost
       DB_PORT: 5432
       DB_USER: postgres
@@ -48,7 +49,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version-file: go.mod
           cache: true
 
       - name: Show Go version
@@ -67,15 +68,19 @@ jobs:
         run: go mod download
 
       - name: Verify module files
-        run: go mod tidy && git diff --exit-code -- go.mod go.sum
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
 
       - name: Wait for PostgreSQL
         run: |
           for i in {1..30}; do
-            pg_isready -h localhost -p 5432 -U postgres -d devfolio && break
+            pg_isready -h localhost -p 5432 -U postgres -d devfolio && exit 0
             echo "Waiting for postgres..."
             sleep 2
           done
+          echo "Postgres did not become ready in time"
+          exit 1
 
       - name: Run database migrations
         run: |
@@ -83,7 +88,7 @@ jobs:
 
       - name: Generate Swagger docs
         run: |
-          swag init -g cmd/api/main.go --parseDependency --parseInternal
+          $(go env GOPATH)/bin/swag init -g cmd/api/main.go --parseDependency --parseInternal
           test -f docs/docs.go
           test -f docs/swagger.json
           test -f docs/swagger.yaml
