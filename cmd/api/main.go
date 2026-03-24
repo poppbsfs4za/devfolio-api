@@ -32,11 +32,11 @@ func main() {
 		log.Fatalf("failed to connect database: %v", err)
 	}
 
-	// if cfg.App.AutoMigrate {
-	// 	if err := database.AutoMigrate(db); err != nil {
-	// 		log.Fatalf("failed to automigrate: %v", err)
-	// 	}
-	// }
+	if cfg.App.AutoMigrate {
+		if err := database.AutoMigrate(db); err != nil {
+			log.Fatalf("failed to automigrate: %v", err)
+		}
+	}
 
 	userRepo := repository.NewUserRepository(db)
 	profileRepo := repository.NewProfileRepository(db)
