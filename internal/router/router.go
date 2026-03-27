@@ -39,4 +39,7 @@ func Setup(app *fiber.App, h Handlers, jwtSecret string) {
 	admin.Delete("/posts/:id", h.Posts.Delete)
 	admin.Post("/tags", h.Tags.Create)
 	admin.Put("/profile", h.Profile.Upsert)
+	admin.Get("/posts", h.Posts.AdminList)
+	admin.Get("/posts/:id", h.Posts.AdminGetByID)
+
 }

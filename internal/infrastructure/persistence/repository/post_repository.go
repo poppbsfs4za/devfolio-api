@@ -48,6 +48,19 @@ func (r *PostRepository) GetByID(id uint) (*entities.Post, error) {
 	return &entity, nil
 }
 
+func (r *PostRepository) AdminList() ([]entities.Post, error) {
+	var models []gormmodel.Post
+
+	if err := r.db.
+		Preload("Tags").
+		Order("updated_at desc").
+		Find(&models).Error; err != nil {
+		return nil, err
+	}
+
+	return toPostEntities(models), nil
+}
+
 func (r *PostRepository) Create(post *entities.Post) error {
 	model := gormmodel.Post{
 		Title:         post.Title,
@@ -103,25 +116,25 @@ func toPostEntities(models []gormmodel.Post) []entities.Post {
 	return result
 }
 
-func toPostEntity(model gormmodel.Post) entities.Post {
-	tags := make([]entities.Tag, 0, len(model.Tags))
-	for _, tag := range model.Tags {
-		tags = append(tags, entities.Tag{ID: tag.ID, Name: tag.Name, Slug: tag.Slug, CreatedAt: tag.CreatedAt, UpdatedAt: tag.UpdatedAt})
+func toPostEntity(m gormmodel.Post) entities.Post {
+	var tags []entities.Tag
+	for _, t := range m.Tags {
+		tags = append(tags, entities.Tag{
+			ID:   t.ID,
+			Name: t.Name,
+			Slug: t.Slug,
+		})
 	}
+
 	return entities.Post{
-		ID:            model.ID,
-		Title:         model.Title,
-		Slug:          model.Slug,
-		Summary:       model.Summary,
-		Content:       model.Content,
-		CoverImageURL: model.CoverImageURL,
-		Status:        model.Status,
-		PublishedAt:   model.PublishedAt,
-		CreatedAt:     model.CreatedAt,
-		UpdatedAt:     model.UpdatedAt,
-		CreatedBy:     model.CreatedBy,
-		UpdatedBy:     model.UpdatedBy,
-		Tags:          tags,
+		ID:      m.ID,
+		Title:   m.Title,
+		Slug:    m.Slug,
+		Summary: m.Summary,
+		Content: m.Content,
+		Status:  m.Status,
+		Tags:    tags,
+		// map field อื่นๆ ด้วย
 	}
 }
 

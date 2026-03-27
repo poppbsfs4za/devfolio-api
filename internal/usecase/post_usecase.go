@@ -25,6 +25,7 @@ type UpdatePostInput struct {
 	Title         string
 	Summary       string
 	Content       string
+	Slug          string
 	CoverImageURL string
 	Status        string
 	TagNames      []string
@@ -89,23 +90,29 @@ func (u *PostUsecase) Update(input UpdatePostInput) (*entities.Post, error) {
 		return nil, errors.New("post not found")
 	}
 	existing.Title = strings.TrimSpace(input.Title)
-	existing.Slug = utils.Slugify(input.Title)
+	slug := strings.TrimSpace(input.Slug)
+	if slug == "" {
+		slug = utils.Slugify(input.Title)
+	}
+	existing.Slug = slug
 	existing.Summary = strings.TrimSpace(input.Summary)
 	existing.Content = input.Content
 	existing.CoverImageURL = strings.TrimSpace(input.CoverImageURL)
 	existing.Status = normalizeStatus(input.Status)
 	existing.UpdatedBy = input.UpdatedBy
-	if existing.Status == "published" && existing.PublishedAt == nil {
-		now := time.Now()
-		existing.PublishedAt = &now
-	}
-	if len(input.TagNames) > 0 {
-		tags, err := u.resolveTags(input.TagNames)
-		if err != nil {
-			return nil, err
+	if existing.Status == "published" {
+		if existing.PublishedAt == nil {
+			now := time.Now()
+			existing.PublishedAt = &now
 		}
-		existing.Tags = tags
+	} else {
+		existing.PublishedAt = nil
 	}
+	tags, err := u.resolveTags(input.TagNames)
+	if err != nil {
+		return nil, err
+	}
+	existing.Tags = tags
 	if err := u.postRepo.Update(existing); err != nil {
 		return nil, err
 	}
@@ -148,4 +155,20 @@ func normalizeStatus(status string) string {
 	default:
 		return "draft"
 	}
+}
+
+func (u *PostUsecase) AdminList() ([]entities.Post, error) {
+	posts, err := u.postRepo.AdminList()
+	if err != nil {
+		return nil, err
+	}
+	return posts, nil
+}
+
+func (u *PostUsecase) AdminGetByID(id uint) (*entities.Post, error) {
+	post, err := u.postRepo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	return post, nil
 }

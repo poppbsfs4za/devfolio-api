@@ -156,3 +156,26 @@ func (h *PostHandler) Delete(c *fiber.Ctx) error {
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
+
+func (h *PostHandler) AdminList(c *fiber.Ctx) error {
+	posts, err := h.usecase.AdminList()
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, err.Error())
+	}
+
+	return response.JSON(c, fiber.StatusOK, posts)
+}
+
+func (h *PostHandler) AdminGetByID(c *fiber.Ctx) error {
+	id, err := strconv.ParseUint(c.Params("id"), 10, 64)
+	if err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid post id")
+	}
+
+	post, err := h.usecase.AdminGetByID(uint(id))
+	if err != nil {
+		return response.Error(c, fiber.StatusNotFound, "post not found")
+	}
+
+	return response.JSON(c, fiber.StatusOK, post)
+}
