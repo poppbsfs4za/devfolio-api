@@ -61,6 +61,10 @@ func main() {
 		Tags:    handlers.NewTagHandler(tagUsecase),
 		Profile: handlers.NewProfileHandler(profileUsecase),
 		Project: handlers.NewProjectHandler(projectUsecase),
+		Uploads: handlers.NewUploadHandler(
+			cfg.Upload.Dir,
+			cfg.Upload.PublicBaseURL,
+		),
 	}
 
 	app := fiber.New()

@@ -14,6 +14,7 @@ type PostHandler struct {
 
 type postRequest struct {
 	Title         string   `json:"title"`
+	Slug          string   `json:"slug"`
 	Summary       string   `json:"summary"`
 	Content       string   `json:"content"`
 	CoverImageURL string   `json:"cover_image_url"`
@@ -107,6 +108,7 @@ func (h *PostHandler) Create(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(uint)
 	post, err := h.usecase.Create(usecase.CreatePostInput{
 		Title:         req.Title,
+		Slug:          req.Slug,
 		Summary:       req.Summary,
 		Content:       req.Content,
 		CoverImageURL: req.CoverImageURL,
@@ -125,14 +127,18 @@ func (h *PostHandler) Update(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
 	}
+
 	id, err := strconv.ParseUint(c.Params("id"), 10, 64)
 	if err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "invalid post id")
 	}
+
 	userID := c.Locals("user_id").(uint)
+
 	post, err := h.usecase.Update(usecase.UpdatePostInput{
 		ID:            uint(id),
 		Title:         req.Title,
+		Slug:          req.Slug,
 		Summary:       req.Summary,
 		Content:       req.Content,
 		CoverImageURL: req.CoverImageURL,
@@ -143,6 +149,7 @@ func (h *PostHandler) Update(c *fiber.Ctx) error {
 	if err != nil {
 		return response.Error(c, fiber.StatusBadRequest, err.Error())
 	}
+
 	return response.JSON(c, fiber.StatusOK, post)
 }
 
@@ -151,9 +158,19 @@ func (h *PostHandler) Delete(c *fiber.Ctx) error {
 	if err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "invalid post id")
 	}
+
+	existing, err := h.usecase.AdminGetByID(uint(id))
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, err.Error())
+	}
+	if existing == nil {
+		return response.Error(c, fiber.StatusNotFound, "post not found")
+	}
+
 	if err := h.usecase.Delete(uint(id)); err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, err.Error())
 	}
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -174,6 +191,9 @@ func (h *PostHandler) AdminGetByID(c *fiber.Ctx) error {
 
 	post, err := h.usecase.AdminGetByID(uint(id))
 	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, err.Error())
+	}
+	if post == nil {
 		return response.Error(c, fiber.StatusNotFound, "post not found")
 	}
 
