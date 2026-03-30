@@ -69,7 +69,11 @@ func main() {
 	}
 
 	app := fiber.New()
-	app.Use(cors.New())
+	app.Use(cors.New(cors.Config{
+		AllowOrigins:     "http://localhost:3000",
+		AllowCredentials: true,
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+	}))
 	app.Use(logger.New())
 	router.Setup(app, h, cfg.JWT.Secret)
 

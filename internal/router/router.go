@@ -30,6 +30,7 @@ func Setup(app *fiber.App, h Handlers, jwtSecret string) {
 
 	api.Get("/health", h.Health.Health)
 	api.Post("/auth/login", h.Auth.Login)
+	api.Post("/auth/logout", h.Auth.Logout)
 
 	api.Get("/profile", h.Profile.Get)
 	api.Get("/posts", h.Posts.ListPublished)
@@ -46,6 +47,5 @@ func Setup(app *fiber.App, h Handlers, jwtSecret string) {
 
 	admin.Post("/tags", h.Tags.Create)
 	admin.Put("/profile", h.Profile.Upsert)
-
 	admin.Post("/uploads/cover", h.Uploads.UploadCover)
 }
