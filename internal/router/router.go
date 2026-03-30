@@ -16,16 +16,21 @@ type Handlers struct {
 	Tags    *handlers.TagHandler
 	Profile *handlers.ProfileHandler
 	Project *handlers.ProjectHandler
+	Uploads *handlers.UploadHandler
 }
 
 func Setup(app *fiber.App, h Handlers, jwtSecret string) {
 	if os.Getenv("APP_ENV") != "production" {
 		app.Get("/swagger/*", fiberSwagger.WrapHandler)
 	}
+
+	app.Static("/uploads", "/app/storage/uploads")
+
 	api := app.Group("/api/v1")
 
 	api.Get("/health", h.Health.Health)
 	api.Post("/auth/login", h.Auth.Login)
+	api.Post("/auth/logout", h.Auth.Logout)
 
 	api.Get("/profile", h.Profile.Get)
 	api.Get("/posts", h.Posts.ListPublished)
@@ -37,6 +42,10 @@ func Setup(app *fiber.App, h Handlers, jwtSecret string) {
 	admin.Post("/posts", h.Posts.Create)
 	admin.Put("/posts/:id", h.Posts.Update)
 	admin.Delete("/posts/:id", h.Posts.Delete)
+	admin.Get("/posts", h.Posts.AdminList)
+	admin.Get("/posts/:id", h.Posts.AdminGetByID)
+
 	admin.Post("/tags", h.Tags.Create)
 	admin.Put("/profile", h.Profile.Upsert)
+	admin.Post("/uploads/cover", h.Uploads.UploadCover)
 }

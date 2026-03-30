@@ -9,10 +9,11 @@ import (
 )
 
 type Config struct {
-	App  AppConfig
-	DB   DBConfig
-	JWT  JWTConfig
-	Seed SeedConfig
+	App    AppConfig
+	DB     DBConfig
+	JWT    JWTConfig
+	Seed   SeedConfig
+	Upload UploadConfig
 }
 
 type AppConfig struct {
@@ -45,6 +46,11 @@ type SeedConfig struct {
 	AdminDisplayName string
 }
 
+type UploadConfig struct {
+	Dir           string
+	PublicBaseURL string
+}
+
 func Load() *Config {
 	_ = godotenv.Load()
 
@@ -74,6 +80,11 @@ func Load() *Config {
 			AdminEmail:       getEnv("ADMIN_EMAIL", "admin@example.com"),
 			AdminPassword:    getEnv("ADMIN_PASSWORD", "changeme123"),
 			AdminDisplayName: getEnv("ADMIN_DISPLAY_NAME", "Admin"),
+		},
+
+		Upload: UploadConfig{
+			Dir:           getEnv("UPLOAD_DIR", "/app/storage/uploads/covers"),
+			PublicBaseURL: getEnv("UPLOAD_PUBLIC_BASE_URL", "http://localhost:8080"),
 		},
 	}
 

@@ -26,7 +26,7 @@ docker-build:
 	docker build -t $(APP):local .
 
 up:
-	docker compose up -d
+	docker compose up -d --build
 
 down:
 	docker compose down

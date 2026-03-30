@@ -53,6 +53,10 @@ func main() {
 	projectUsecase := usecase.NewProjectUsecase(projectRepo)
 	tagUsecase := usecase.NewTagUsecase(tagRepo)
 	postUsecase := usecase.NewPostUsecase(postRepo, tagRepo)
+	uploadUsecase := usecase.NewUploadUsecase(
+		cfg.Upload.Dir,
+		cfg.Upload.PublicBaseURL,
+	)
 
 	h := router.Handlers{
 		Health:  handlers.NewHealthHandler(),
@@ -61,10 +65,15 @@ func main() {
 		Tags:    handlers.NewTagHandler(tagUsecase),
 		Profile: handlers.NewProfileHandler(profileUsecase),
 		Project: handlers.NewProjectHandler(projectUsecase),
+		Uploads: handlers.NewUploadHandler(uploadUsecase),
 	}
 
 	app := fiber.New()
-	app.Use(cors.New())
+	app.Use(cors.New(cors.Config{
+		AllowOrigins:     "http://localhost:3000",
+		AllowCredentials: true,
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+	}))
 	app.Use(logger.New())
 	router.Setup(app, h, cfg.JWT.Secret)
 

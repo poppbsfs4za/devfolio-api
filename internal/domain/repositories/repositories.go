@@ -25,8 +25,11 @@ type TagRepository interface {
 type PostRepository interface {
 	ListPublished() ([]entities.Post, error)
 	GetPublishedBySlug(slug string) (*entities.Post, error)
+
+	AdminList() ([]entities.Post, error)
+	GetByID(id uint) (*entities.Post, error)
+
 	Create(post *entities.Post) error
 	Update(post *entities.Post) error
 	Delete(id uint) error
-	GetByID(id uint) (*entities.Post, error)
 }

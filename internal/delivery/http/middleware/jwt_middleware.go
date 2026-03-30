@@ -3,28 +3,68 @@ package middleware
 import (
 	"strings"
 
-	"github.com/example/devfolio-api/internal/delivery/http/response"
-	pkgAuth "github.com/example/devfolio-api/pkg/auth"
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 )
+
+const authCookieName = "devfolio_token"
 
 func JWT(secret string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		tokenString := ""
+
 		authHeader := c.Get("Authorization")
-		if authHeader == "" {
-			return response.Error(c, fiber.StatusUnauthorized, "missing authorization header")
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			tokenString = strings.TrimPrefix(authHeader, "Bearer ")
 		}
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			return response.Error(c, fiber.StatusUnauthorized, "invalid authorization header")
+
+		if tokenString == "" {
+			tokenString = c.Cookies(authCookieName)
 		}
-		claims, err := pkgAuth.ParseToken(secret, parts[1])
-		if err != nil {
-			return response.Error(c, fiber.StatusUnauthorized, "invalid token")
+
+		if tokenString == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": fiber.Map{
+					"code":    "UNAUTHORIZED",
+					"message": "missing auth token",
+				},
+			})
 		}
-		c.Locals("user_id", claims.UserID)
-		c.Locals("user_email", claims.Email)
-		c.Locals("display_name", claims.DisplayName)
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return []byte(secret), nil
+		})
+
+		if err != nil || !token.Valid {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": fiber.Map{
+					"code":    "UNAUTHORIZED",
+					"message": "invalid token",
+				},
+			})
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": fiber.Map{
+					"code":    "UNAUTHORIZED",
+					"message": "invalid token claims",
+				},
+			})
+		}
+
+		userIDFloat, ok := claims["user_id"].(float64)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": fiber.Map{
+					"code":    "UNAUTHORIZED",
+					"message": "invalid user id in token",
+				},
+			})
+		}
+
+		c.Locals("user_id", uint(userIDFloat))
 		return c.Next()
 	}
 }

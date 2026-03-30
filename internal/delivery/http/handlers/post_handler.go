@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/example/devfolio-api/internal/delivery/http/response"
 	"github.com/example/devfolio-api/internal/usecase"
@@ -14,6 +15,7 @@ type PostHandler struct {
 
 type postRequest struct {
 	Title         string   `json:"title"`
+	Slug          string   `json:"slug"`
 	Summary       string   `json:"summary"`
 	Content       string   `json:"content"`
 	CoverImageURL string   `json:"cover_image_url"`
@@ -22,14 +24,15 @@ type postRequest struct {
 }
 
 type PostResponse struct {
-	ID            uint   `json:"id"`
-	Title         string `json:"title"`
-	Slug          string `json:"slug"`
-	Summary       string `json:"summary"`
-	Content       string `json:"content"`
-	CoverImageURL string `json:"cover_image_url"`
-	Status        string `json:"status"`
-	CreatedBy     uint   `json:"created_by"`
+	ID            uint      `json:"id"`
+	Title         string    `json:"title"`
+	Slug          string    `json:"slug"`
+	Summary       string    `json:"summary"`
+	Content       string    `json:"content"`
+	CoverImageURL string    `json:"cover_image_url"`
+	Status        string    `json:"status"`
+	CreatedBy     uint      `json:"created_by"`
+	PublishedAt   time.Time `json:"published_at"`
 }
 
 func NewPostHandler(usecase *usecase.PostUsecase) *PostHandler {
@@ -46,7 +49,7 @@ func NewPostHandler(usecase *usecase.PostUsecase) *PostHandler {
 func (h *PostHandler) ListPublished(c *fiber.Ctx) error {
 	posts, err := h.usecase.ListPublished()
 	if err != nil {
-		return response.Error(c, fiber.StatusInternalServerError, err.Error())
+		return response.Error(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 	}
 
 	var res []PostResponse
@@ -60,6 +63,7 @@ func (h *PostHandler) ListPublished(c *fiber.Ctx) error {
 			CoverImageURL: p.CoverImageURL,
 			Status:        p.Status,
 			CreatedBy:     p.CreatedBy,
+			PublishedAt:   *p.PublishedAt,
 		})
 	}
 
@@ -78,14 +82,13 @@ func (h *PostHandler) ListPublished(c *fiber.Ctx) error {
 func (h *PostHandler) GetPublishedBySlug(c *fiber.Ctx) error {
 	post, err := h.usecase.GetPublishedBySlug(c.Params("slug"))
 	if err != nil {
-		return response.Error(c, fiber.StatusInternalServerError, err.Error())
+		return response.Error(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 	}
 	if post == nil {
-		return response.Error(c, fiber.StatusNotFound, "post not found")
+		return response.Error(c, fiber.StatusNotFound, "POST_NOT_FOUND", "post not found")
 	}
 
-	var res PostResponse
-	res = PostResponse{
+	res := PostResponse{
 		ID:            post.ID,
 		Title:         post.Title,
 		Slug:          post.Slug,
@@ -94,6 +97,7 @@ func (h *PostHandler) GetPublishedBySlug(c *fiber.Ctx) error {
 		CoverImageURL: post.CoverImageURL,
 		Status:        post.Status,
 		CreatedBy:     post.CreatedBy,
+		PublishedAt:   *post.PublishedAt,
 	}
 
 	return response.JSON(c, fiber.StatusOK, res)
@@ -102,11 +106,17 @@ func (h *PostHandler) GetPublishedBySlug(c *fiber.Ctx) error {
 func (h *PostHandler) Create(c *fiber.Ctx) error {
 	var req postRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+		return response.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", "invalid request body")
 	}
-	userID := c.Locals("user_id").(uint)
+
+	userID, ok := c.Locals("user_id").(uint)
+	if !ok {
+		return response.Error(c, fiber.StatusUnauthorized, "UNAUTHORIZED", "invalid user context")
+	}
+
 	post, err := h.usecase.Create(usecase.CreatePostInput{
 		Title:         req.Title,
+		Slug:          req.Slug,
 		Summary:       req.Summary,
 		Content:       req.Content,
 		CoverImageURL: req.CoverImageURL,
@@ -115,24 +125,32 @@ func (h *PostHandler) Create(c *fiber.Ctx) error {
 		CreatedBy:     userID,
 	})
 	if err != nil {
-		return response.Error(c, fiber.StatusBadRequest, err.Error())
+		return response.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", err.Error())
 	}
+
 	return response.JSON(c, fiber.StatusCreated, post)
 }
 
 func (h *PostHandler) Update(c *fiber.Ctx) error {
 	var req postRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+		return response.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", "invalid request body")
 	}
+
 	id, err := strconv.ParseUint(c.Params("id"), 10, 64)
 	if err != nil {
-		return response.Error(c, fiber.StatusBadRequest, "invalid post id")
+		return response.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", "invalid post id")
 	}
-	userID := c.Locals("user_id").(uint)
+
+	userID, ok := c.Locals("user_id").(uint)
+	if !ok {
+		return response.Error(c, fiber.StatusUnauthorized, "UNAUTHORIZED", "invalid user context")
+	}
+
 	post, err := h.usecase.Update(usecase.UpdatePostInput{
 		ID:            uint(id),
 		Title:         req.Title,
+		Slug:          req.Slug,
 		Summary:       req.Summary,
 		Content:       req.Content,
 		CoverImageURL: req.CoverImageURL,
@@ -141,18 +159,58 @@ func (h *PostHandler) Update(c *fiber.Ctx) error {
 		UpdatedBy:     userID,
 	})
 	if err != nil {
-		return response.Error(c, fiber.StatusBadRequest, err.Error())
+		if err.Error() == "post not found" {
+			return response.Error(c, fiber.StatusNotFound, "POST_NOT_FOUND", "post not found")
+		}
+		return response.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", err.Error())
 	}
+
 	return response.JSON(c, fiber.StatusOK, post)
 }
 
 func (h *PostHandler) Delete(c *fiber.Ctx) error {
 	id, err := strconv.ParseUint(c.Params("id"), 10, 64)
 	if err != nil {
-		return response.Error(c, fiber.StatusBadRequest, "invalid post id")
+		return response.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", "invalid post id")
 	}
+
+	existing, err := h.usecase.AdminGetByID(uint(id))
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+	}
+	if existing == nil {
+		return response.Error(c, fiber.StatusNotFound, "POST_NOT_FOUND", "post not found")
+	}
+
 	if err := h.usecase.Delete(uint(id)); err != nil {
-		return response.Error(c, fiber.StatusInternalServerError, err.Error())
+		return response.Error(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 	}
+
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *PostHandler) AdminList(c *fiber.Ctx) error {
+	posts, err := h.usecase.AdminList()
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+	}
+
+	return response.JSON(c, fiber.StatusOK, posts)
+}
+
+func (h *PostHandler) AdminGetByID(c *fiber.Ctx) error {
+	id, err := strconv.ParseUint(c.Params("id"), 10, 64)
+	if err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", "invalid post id")
+	}
+
+	post, err := h.usecase.AdminGetByID(uint(id))
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+	}
+	if post == nil {
+		return response.Error(c, fiber.StatusNotFound, "POST_NOT_FOUND", "post not found")
+	}
+
+	return response.JSON(c, fiber.StatusOK, post)
 }

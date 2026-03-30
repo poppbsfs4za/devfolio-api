@@ -17,7 +17,7 @@ func NewProjectHandler(usecase *usecase.ProjectUsecase) *ProjectHandler {
 func (h *ProjectHandler) ListFeatured(c *fiber.Ctx) error {
 	projects, err := h.usecase.ListFeatured()
 	if err != nil {
-		return response.Error(c, fiber.StatusInternalServerError, err.Error())
+		return response.Error(c, fiber.StatusInternalServerError, "PROJECT_LIST_FAILED", err.Error())
 	}
 	return response.JSON(c, fiber.StatusOK, projects)
 }
