@@ -27,10 +27,10 @@ func NewProfileHandler(usecase *usecase.ProfileUsecase) *ProfileHandler {
 func (h *ProfileHandler) Get(c *fiber.Ctx) error {
 	profile, err := h.usecase.Get()
 	if err != nil {
-		return response.Error(c, fiber.StatusInternalServerError, err.Error())
+		return response.Error(c, fiber.StatusInternalServerError, "PROFILE_GET_FAILED", err.Error())
 	}
 	if profile == nil {
-		return response.Error(c, fiber.StatusNotFound, "profile not found")
+		return response.Error(c, fiber.StatusNotFound, "PROFILE_NOT_FOUND", "profile not found")
 	}
 	return response.JSON(c, fiber.StatusOK, profile)
 }
@@ -38,7 +38,7 @@ func (h *ProfileHandler) Get(c *fiber.Ctx) error {
 func (h *ProfileHandler) Upsert(c *fiber.Ctx) error {
 	var req upsertProfileRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+		return response.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", "invalid request body")
 	}
 	profile := &entities.Profile{
 		FullName:    req.FullName,
@@ -49,7 +49,7 @@ func (h *ProfileHandler) Upsert(c *fiber.Ctx) error {
 		AvatarURL:   req.AvatarURL,
 	}
 	if err := h.usecase.Upsert(profile); err != nil {
-		return response.Error(c, fiber.StatusInternalServerError, err.Error())
+		return response.Error(c, fiber.StatusInternalServerError, "PROFILE_UPSERT_FAILED", err.Error())
 	}
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "profile saved"})
 }

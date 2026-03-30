@@ -33,11 +33,11 @@ func NewAuthHandler(usecase *usecase.AuthUsecase) *AuthHandler {
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	var req LoginRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+		return response.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", "invalid request body")
 	}
 	token, err := h.usecase.Login(req.Email, req.Password)
 	if err != nil {
-		return response.Error(c, fiber.StatusUnauthorized, err.Error())
+		return response.Error(c, fiber.StatusUnauthorized, "UNAUTHORIZED", err.Error())
 	}
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"access_token": token})
 }

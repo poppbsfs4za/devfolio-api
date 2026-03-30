@@ -17,7 +17,7 @@ func NewTagHandler(usecase *usecase.TagUsecase) *TagHandler {
 func (h *TagHandler) List(c *fiber.Ctx) error {
 	tags, err := h.usecase.List()
 	if err != nil {
-		return response.Error(c, fiber.StatusInternalServerError, err.Error())
+		return response.Error(c, fiber.StatusInternalServerError, "TAG_LIST_FAILED", err.Error())
 	}
 	return response.JSON(c, fiber.StatusOK, tags)
 }
@@ -27,11 +27,11 @@ func (h *TagHandler) Create(c *fiber.Ctx) error {
 		Name string `json:"name"`
 	}
 	if err := c.BodyParser(&req); err != nil {
-		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+		return response.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", "invalid request body")
 	}
 	tag, err := h.usecase.Create(req.Name)
 	if err != nil {
-		return response.Error(c, fiber.StatusBadRequest, err.Error())
+		return response.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", err.Error())
 	}
 	return response.JSON(c, fiber.StatusCreated, tag)
 }

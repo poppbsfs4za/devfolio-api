@@ -53,6 +53,10 @@ func main() {
 	projectUsecase := usecase.NewProjectUsecase(projectRepo)
 	tagUsecase := usecase.NewTagUsecase(tagRepo)
 	postUsecase := usecase.NewPostUsecase(postRepo, tagRepo)
+	uploadUsecase := usecase.NewUploadUsecase(
+		cfg.Upload.Dir,
+		cfg.Upload.PublicBaseURL,
+	)
 
 	h := router.Handlers{
 		Health:  handlers.NewHealthHandler(),
@@ -61,10 +65,7 @@ func main() {
 		Tags:    handlers.NewTagHandler(tagUsecase),
 		Profile: handlers.NewProfileHandler(profileUsecase),
 		Project: handlers.NewProjectHandler(projectUsecase),
-		Uploads: handlers.NewUploadHandler(
-			cfg.Upload.Dir,
-			cfg.Upload.PublicBaseURL,
-		),
+		Uploads: handlers.NewUploadHandler(uploadUsecase),
 	}
 
 	app := fiber.New()
