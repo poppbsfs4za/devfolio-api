@@ -172,6 +172,9 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "published_at": {
+                    "type": "string"
+                },
                 "slug": {
                     "type": "string"
                 },

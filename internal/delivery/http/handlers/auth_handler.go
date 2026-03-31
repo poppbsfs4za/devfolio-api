@@ -14,7 +14,7 @@ type AuthHandler struct {
 	usecase *usecase.AuthUsecase
 }
 
-type loginRequest struct {
+type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
@@ -35,7 +35,7 @@ func NewAuthHandler(usecase *usecase.AuthUsecase) *AuthHandler {
 // @Failure 401 {object} map[string]interface{}
 // @Router /auth/login [post]
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
-	var req loginRequest
+	var req LoginRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "BAD_REQUEST", "invalid request body")
 	}
