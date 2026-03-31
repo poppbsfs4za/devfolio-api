@@ -14,6 +14,7 @@ type Config struct {
 	JWT    JWTConfig
 	Seed   SeedConfig
 	Upload UploadConfig
+	CORS   CORSConfig
 }
 
 type AppConfig struct {
@@ -51,6 +52,11 @@ type UploadConfig struct {
 	PublicBaseURL string
 }
 
+type CORSConfig struct {
+	AllowOrigins string
+	AllowMethods string
+}
+
 func Load() *Config {
 	_ = godotenv.Load()
 
@@ -85,6 +91,11 @@ func Load() *Config {
 		Upload: UploadConfig{
 			Dir:           getEnv("UPLOAD_DIR", "/app/storage/uploads/covers"),
 			PublicBaseURL: getEnv("UPLOAD_PUBLIC_BASE_URL", "http://localhost:8080"),
+		},
+
+		CORS: CORSConfig{
+			AllowOrigins: getEnv("CORS_ALLOW_ORIGINS", "http://localhost:3000"),
+			AllowMethods: getEnv("CORS_ALLOW_METHODS", "GET,POST,PUT,PATCH,DELETE,OPTIONS"),
 		},
 	}
 

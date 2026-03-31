@@ -45,15 +45,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return response.Error(c, fiber.StatusUnauthorized, "UNAUTHORIZED", "invalid email or password")
 	}
 
-	c.Cookie(&fiber.Cookie{
-		Name:     authCookieName,
-		Value:    token,
-		Path:     "/",
-		HTTPOnly: true,
-		SameSite: "Lax",
-		Secure:   true,
-		Expires:  time.Now().Add(24 * time.Hour),
-	})
+	c.Cookie(buildAuthCookie(token, time.Now().Add(24*time.Hour), true))
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{
 		"access_token": token,
@@ -61,17 +53,22 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 }
 
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
-	c.Cookie(&fiber.Cookie{
-		Name:     authCookieName,
-		Value:    "",
-		Path:     "/",
-		HTTPOnly: true,
-		SameSite: "Lax",
-		Secure:   false,
-		Expires:  time.Now().Add(-1 * time.Hour),
-	})
+
+	c.Cookie(buildAuthCookie("", time.Now().Add(-1*time.Hour), true))
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{
 		"message": "logged out",
 	})
+}
+
+func buildAuthCookie(value string, expires time.Time, secure bool) *fiber.Cookie {
+	return &fiber.Cookie{
+		Name:     authCookieName,
+		Value:    value,
+		Path:     "/",
+		HTTPOnly: true,
+		SameSite: "Lax",
+		Secure:   secure,
+		Expires:  expires,
+	}
 }
