@@ -24,7 +24,8 @@ func Setup(app *fiber.App, h Handlers, jwtSecret string) {
 		app.Get("/swagger/*", fiberSwagger.WrapHandler)
 	}
 
-	app.Static("/uploads", "/app/storage/uploads")
+	//app.Static("/uploads", "/app/storage/uploads")
+	app.Static("/uploads", "./storage/uploads")
 
 	api := app.Group("/api/v1")
 
