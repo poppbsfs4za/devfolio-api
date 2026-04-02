@@ -19,7 +19,7 @@ services:
       retries: 5
 
   api:
-    build: .
+    image: 077342897pop/devfolio-api:latest
     container_name: devfolio-api
     ports:
       - "8080:8080"
