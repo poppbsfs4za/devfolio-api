@@ -7,8 +7,10 @@ package main
 // @BasePath /api/v1
 
 import (
+	"context"
 	"log"
 
+	"cloud.google.com/go/storage"
 	_ "github.com/example/devfolio-api/docs"
 	"github.com/example/devfolio-api/internal/config"
 	"github.com/example/devfolio-api/internal/database"
@@ -53,9 +55,15 @@ func main() {
 	projectUsecase := usecase.NewProjectUsecase(projectRepo)
 	tagUsecase := usecase.NewTagUsecase(tagRepo)
 	postUsecase := usecase.NewPostUsecase(postRepo, tagRepo)
+	storageClient, err := storage.NewClient(context.Background())
+	if err != nil {
+		log.Fatalf("failed to create storage client: %v", err)
+	}
+
 	uploadUsecase := usecase.NewUploadUsecase(
-		cfg.Upload.Dir,
-		cfg.Upload.PublicBaseURL,
+		cfg.GCS.BucketName,
+		cfg.GCS.PublicBaseURL,
+		storageClient,
 	)
 
 	h := router.Handlers{

@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"os"
-
 	"github.com/example/devfolio-api/internal/delivery/http/response"
 	"github.com/example/devfolio-api/internal/usecase"
 	"github.com/gofiber/fiber/v2"
@@ -36,7 +34,7 @@ func (h *UploadHandler) UploadCover(c *fiber.Ctx) error {
 		return response.Error(c, fiber.StatusInternalServerError, "UPLOAD_INVALID_STREAM", "uploaded file stream is not seekable")
 	}
 
-	result, err := h.usecase.SaveCover(usecase.SaveCoverInput{
+	result, err := h.usecase.SaveCover(c.Context(), usecase.SaveCoverInput{
 		File: readSeeker,
 		Size: fileHeader.Size,
 	})
@@ -49,10 +47,6 @@ func (h *UploadHandler) UploadCover(c *fiber.Ctx) error {
 		default:
 			return response.Error(c, fiber.StatusBadRequest, "UPLOAD_FAILED", err.Error())
 		}
-	}
-
-	if _, err := os.Stat(result.Path); err != nil {
-		return response.Error(c, fiber.StatusInternalServerError, "UPLOAD_SAVE_VERIFICATION_FAILED", "uploaded file was not saved correctly")
 	}
 
 	return response.JSON(c, fiber.StatusCreated, fiber.Map{

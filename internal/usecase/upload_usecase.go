@@ -1,29 +1,32 @@
 package usecase
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
+
+	"cloud.google.com/go/storage"
 )
 
 const MaxCoverUploadSize int64 = 5 * 1024 * 1024 // 5MB
 
 type UploadUsecase struct {
-	uploadDir     string
+	bucketName    string
 	publicBaseURL string
+	storageClient *storage.Client
 }
 
-func NewUploadUsecase(uploadDir string, publicBaseURL string) *UploadUsecase {
+func NewUploadUsecase(bucketName string, publicBaseURL string, storageClient *storage.Client) *UploadUsecase {
 	return &UploadUsecase{
-		uploadDir:     uploadDir,
+		bucketName:    bucketName,
 		publicBaseURL: strings.TrimRight(publicBaseURL, "/"),
+		storageClient: storageClient,
 	}
 }
 
@@ -33,12 +36,12 @@ type SaveCoverInput struct {
 }
 
 type SaveCoverOutput struct {
-	URL      string
-	Filename string
-	Path     string
+	URL       string
+	Filename  string
+	ObjectKey string
 }
 
-func (u *UploadUsecase) SaveCover(input SaveCoverInput) (*SaveCoverOutput, error) {
+func (u *UploadUsecase) SaveCover(ctx context.Context, input SaveCoverInput) (*SaveCoverOutput, error) {
 	if input.File == nil {
 		return nil, errors.New("file is required")
 	}
@@ -47,7 +50,6 @@ func (u *UploadUsecase) SaveCover(input SaveCoverInput) (*SaveCoverOutput, error
 		return nil, errors.New("file size must be less than or equal to 5 MB")
 	}
 
-	// sniff file type
 	sniff := make([]byte, 512)
 	n, err := input.File.Read(sniff)
 	if err != nil && err != io.EOF {
@@ -61,35 +63,36 @@ func (u *UploadUsecase) SaveCover(input SaveCoverInput) (*SaveCoverOutput, error
 		return nil, errors.New("only jpg, jpeg, png, webp, and gif files are allowed")
 	}
 
-	// reset cursor
 	if _, err := input.File.Seek(0, io.SeekStart); err != nil {
 		return nil, errors.New("failed to process uploaded file")
 	}
 
-	// ensure dir
-	if err := os.MkdirAll(u.uploadDir, 0755); err != nil {
-		return nil, errors.New("failed to prepare upload directory")
-	}
-
 	filename := buildUploadFilename(ext)
-	dstPath := filepath.Join(u.uploadDir, filename)
+	objectKey := fmt.Sprintf("covers/%s", filename)
 
-	dst, err := os.Create(dstPath)
-	if err != nil {
-		return nil, errors.New("failed to create upload file")
-	}
-	defer dst.Close()
+	writer := u.storageClient.
+		Bucket(u.bucketName).
+		Object(objectKey).
+		NewWriter(ctx)
 
-	if _, err := io.Copy(dst, input.File); err != nil {
+	writer.ContentType = contentType
+	writer.CacheControl = "public, max-age=31536000"
+
+	if _, err := io.Copy(writer, input.File); err != nil {
+		_ = writer.Close()
 		return nil, errors.New("failed to save uploaded file")
 	}
 
-	fileURL := fmt.Sprintf("%s/uploads/covers/%s", u.publicBaseURL, filename)
+	if err := writer.Close(); err != nil {
+		return nil, errors.New("failed to finalize uploaded file")
+	}
+
+	fileURL := fmt.Sprintf("%s/%s", u.publicBaseURL, objectKey)
 
 	return &SaveCoverOutput{
-		URL:      fileURL,
-		Filename: filename,
-		Path:     dstPath,
+		URL:       fileURL,
+		Filename:  filename,
+		ObjectKey: objectKey,
 	}, nil
 }
 

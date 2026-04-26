@@ -14,6 +14,7 @@ type Config struct {
 	JWT    JWTConfig
 	Seed   SeedConfig
 	Upload UploadConfig
+	GCS    GCSConfig
 	CORS   CORSConfig
 }
 
@@ -52,6 +53,11 @@ type UploadConfig struct {
 	PublicBaseURL string
 }
 
+type GCSConfig struct {
+	BucketName    string
+	PublicBaseURL string
+}
+
 type CORSConfig struct {
 	AllowOrigins string
 	AllowMethods string
@@ -87,12 +93,14 @@ func Load() *Config {
 			AdminPassword:    getEnv("ADMIN_PASSWORD", "changeme123"),
 			AdminDisplayName: getEnv("ADMIN_DISPLAY_NAME", "Admin"),
 		},
-
 		Upload: UploadConfig{
 			Dir:           getEnv("UPLOAD_DIR", "/app/storage/uploads/covers"),
 			PublicBaseURL: getEnv("UPLOAD_PUBLIC_BASE_URL", "http://localhost:8080"),
 		},
-
+		GCS: GCSConfig{
+			BucketName:    getEnv("GCS_BUCKET_NAME", ""),
+			PublicBaseURL: getEnv("GCS_PUBLIC_BASE_URL", ""),
+		},
 		CORS: CORSConfig{
 			AllowOrigins: getEnv("CORS_ALLOW_ORIGINS", "http://localhost:3000"),
 			AllowMethods: getEnv("CORS_ALLOW_METHODS", "GET,POST,PUT,PATCH,DELETE,OPTIONS"),
