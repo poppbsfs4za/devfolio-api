@@ -4,6 +4,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: devfolio-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -21,6 +22,7 @@ services:
   api:
     image: 077342897pop/devfolio-api:latest
     container_name: devfolio-api
+    restart: unless-stopped
     ports:
       - "8080:8080"
     env_file:
