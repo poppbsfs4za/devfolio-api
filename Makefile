@@ -30,3 +30,6 @@ up:
 
 down:
 	docker compose down
+
+db-connect:
+	devfolio-db
