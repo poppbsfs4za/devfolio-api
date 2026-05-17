@@ -98,6 +98,3 @@ jobs:
 
       - name: Build application
         run: go build -o bin/api ./cmd/api
-
-      - name: Build application
-        run: go build -o bin/api ./cmd/api
