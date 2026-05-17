@@ -87,8 +87,8 @@ jobs:
             --min-instances=0 \
             --max-instances=2 \
             --set-cloudsql-instances="$CLOUD_SQL_INSTANCE" \
-            --update-env-vars="APP_ENV=production,APP_PORT=8080,DB_HOST=/cloudsql/$CLOUD_SQL_INSTANCE,DB_PORT=5432,DB_USER=postgres,DB_NAME=devfolio,DB_SSLMODE=disable,DB_TIMEZONE=Asia/Bangkok,AUTO_MIGRATE=false,ADMIN_EMAIL=admin_kraiwit@gmail.com,ADMIN_DISPLAY_NAME=Kraiwit,GCS_BUCKET_NAME=kraiwit-devfolio-uploads,GCS_PUBLIC_BASE_URL=https://storage.googleapis.com/kraiwit-devfolio-uploads" \
-            --update-secrets="DB_PASSWORD=devfolio-db-password:latest,JWT_SECRET=devfolio-jwt-secret:latest,ADMIN_PASSWORD=devfolio-admin-password:latest"
+            --update-env-vars="APP_ENV=production,APP_PORT=8080,DB_HOST=/cloudsql/$CLOUD_SQL_INSTANCE,DB_PORT=5432,DB_USER=devfolio_app,DB_NAME=devfolio,DB_SSLMODE=disable,DB_TIMEZONE=Asia/Bangkok,AUTO_MIGRATE=false,ADMIN_EMAIL=admin_kraiwit@gmail.com,ADMIN_DISPLAY_NAME=Kraiwit,GCS_BUCKET_NAME=kraiwit-devfolio-uploads,GCS_PUBLIC_BASE_URL=https://storage.googleapis.com/kraiwit-devfolio-uploads" \
+            --update-secrets="DB_PASSWORD=devfolio-app-db-password:latest,JWT_SECRET=devfolio-jwt-secret:latest,ADMIN_PASSWORD=devfolio-admin-password:latest"
 
       - name: Health check
         run: |
