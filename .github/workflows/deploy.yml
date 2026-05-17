@@ -1,49 +1,101 @@
-name: Deploy to VM
+name: Deploy to Cloud Run
 
 on:
   workflow_run:
     workflows: ["CI"]
     types:
       - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
 
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+env:
+  PROJECT_ID: famous-crossing-351110
+  REGION: us-central1
+  SERVICE_NAME: devfolio-api-cr
+  ARTIFACT_REPO: devfolio
+  IMAGE_NAME: devfolio-api
+  RUNTIME_SERVICE_ACCOUNT: devfolio-backend-run@famous-crossing-351110.iam.gserviceaccount.com
+  DEPLOYER_SERVICE_ACCOUNT: devfolio-github-deployer@famous-crossing-351110.iam.gserviceaccount.com
+  CLOUD_SQL_INSTANCE: famous-crossing-351110:us-central1:devfolio-postgres
+
 jobs:
   deploy:
     if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
+
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Checkout source
+        uses: actions/checkout@v4
         with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          timeout: 60s
-          command_timeout: 30m
-          script: |
-            set -e
-            cd ~/devfolio-api
-            git pull origin main
-            docker compose pull
-            docker compose up -d --remove-orphans
-            docker ps
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-            for i in {1..20}; do
-              if curl --fail http://localhost:8080/api/v1/health; then
-                echo "API is healthy"
-                exit 0
-              fi
-              echo "waiting for api..."
-              sleep 3
-            done
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
 
-            echo "API health check failed"
-            exit 1
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          version: ">= 363.0.0"
 
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+
+      - name: Build Docker image
+        run: |
+          IMAGE_SHA="$REGION-docker.pkg.dev/$PROJECT_ID/$ARTIFACT_REPO/$IMAGE_NAME:${{ github.event.workflow_run.head_sha || github.sha }}"
+          IMAGE_LATEST="$REGION-docker.pkg.dev/$PROJECT_ID/$ARTIFACT_REPO/$IMAGE_NAME:latest"
+
+          docker build -t "$IMAGE_SHA" -t "$IMAGE_LATEST" .
+
+          echo "IMAGE_SHA=$IMAGE_SHA" >> "$GITHUB_ENV"
+          echo "IMAGE_LATEST=$IMAGE_LATEST" >> "$GITHUB_ENV"
+
+      - name: Push Docker image
+        run: |
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE_NAME" \
+            --project="$PROJECT_ID" \
+            --region="$REGION" \
+            --image="$IMAGE_SHA" \
+            --platform=managed \
+            --allow-unauthenticated \
+            --service-account="$RUNTIME_SERVICE_ACCOUNT" \
+            --port=8080 \
+            --memory=512Mi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=2 \
+            --set-cloudsql-instances="$CLOUD_SQL_INSTANCE" \
+            --update-env-vars="APP_ENV=production,APP_PORT=8080,DB_HOST=/cloudsql/$CLOUD_SQL_INSTANCE,DB_PORT=5432,DB_USER=postgres,DB_NAME=devfolio,DB_SSLMODE=disable,DB_TIMEZONE=Asia/Bangkok,AUTO_MIGRATE=false,ADMIN_EMAIL=admin_kraiwit@gmail.com,ADMIN_DISPLAY_NAME=Kraiwit,GCS_BUCKET_NAME=kraiwit-devfolio-uploads,GCS_PUBLIC_BASE_URL=https://storage.googleapis.com/kraiwit-devfolio-uploads" \
+            --update-secrets="DB_PASSWORD=devfolio-db-password:latest,JWT_SECRET=devfolio-jwt-secret:latest,ADMIN_PASSWORD=devfolio-admin-password:latest"
+
+      - name: Health check
+        run: |
+          SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" \
+            --project="$PROJECT_ID" \
+            --region="$REGION" \
+            --format="value(status.url)")
+
+          echo "Testing $SERVICE_URL/api/v1/health"
+          curl -fsS "$SERVICE_URL/api/v1/health"
