@@ -17,3 +17,7 @@ vendor/
 
 
 storage/
+
+*.md
+!README.md
+!CLAUDE.md
