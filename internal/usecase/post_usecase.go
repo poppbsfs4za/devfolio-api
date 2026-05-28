@@ -151,22 +151,29 @@ func (u *PostUsecase) resolveTags(tagNames []string) ([]entities.Tag, error) {
 			continue
 		}
 
-		tag := entities.Tag{Name: name, Slug: utils.Slugify(name)}
+		slug := utils.Slugify(name)
 
-		existing, err := u.tagRepo.GetByNames([]string{name})
+		existing, err := u.tagRepo.GetBySlugs([]string{slug})
 		if err != nil {
 			return nil, err
 		}
-
-		if len(existing) == 0 {
-			if err := u.tagRepo.Create(&tag); err != nil {
-				return nil, err
-			}
-			resolved = append(resolved, tag)
+		if len(existing) > 0 {
+			resolved = append(resolved, existing[0])
 			continue
 		}
 
-		resolved = append(resolved, existing[0])
+		tag := entities.Tag{Name: name, Slug: slug}
+		if err := u.tagRepo.Create(&tag); err != nil {
+			// Guard against a concurrent insert winning the race: re-fetch by slug.
+			fetched, ferr := u.tagRepo.GetBySlugs([]string{slug})
+			if ferr != nil || len(fetched) == 0 {
+				return nil, err
+			}
+			resolved = append(resolved, fetched[0])
+			continue
+		}
+
+		resolved = append(resolved, tag)
 	}
 
 	return resolved, nil

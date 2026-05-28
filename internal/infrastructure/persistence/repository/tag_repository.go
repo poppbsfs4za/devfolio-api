@@ -41,6 +41,21 @@ func (r *TagRepository) GetByNames(names []string) ([]entities.Tag, error) {
 	return result, nil
 }
 
+func (r *TagRepository) GetBySlugs(slugs []string) ([]entities.Tag, error) {
+	if len(slugs) == 0 {
+		return []entities.Tag{}, nil
+	}
+	var models []gormmodel.Tag
+	if err := r.db.Where("slug IN ?", slugs).Find(&models).Error; err != nil {
+		return nil, err
+	}
+	result := make([]entities.Tag, 0, len(models))
+	for _, tag := range models {
+		result = append(result, entities.Tag{ID: tag.ID, Name: tag.Name, Slug: tag.Slug, CreatedAt: tag.CreatedAt, UpdatedAt: tag.UpdatedAt})
+	}
+	return result, nil
+}
+
 func (r *TagRepository) Create(tag *entities.Tag) error {
 	model := gormmodel.Tag{Name: tag.Name, Slug: tag.Slug}
 	if err := r.db.Create(&model).Error; err != nil {

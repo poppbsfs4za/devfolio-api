@@ -82,7 +82,7 @@ func (r *PostRepository) Create(post *entities.Post) error {
 		model.Tags = toTagModels(post.Tags)
 	}
 
-	if err := r.db.Create(&model).Error; err != nil {
+	if err := r.db.Omit("Tags.*").Create(&model).Error; err != nil {
 		return err
 	}
 
@@ -107,7 +107,7 @@ func (r *PostRepository) Update(post *entities.Post) error {
 	model.PublishedAt = post.PublishedAt
 	model.UpdatedBy = post.UpdatedBy
 
-	if err := r.db.Session(&gorm.Session{FullSaveAssociations: true}).Model(&model).Association("Tags").Replace(toTagModels(post.Tags)); err != nil {
+	if err := r.db.Model(&model).Association("Tags").Replace(toTagModels(post.Tags)); err != nil {
 		return err
 	}
 

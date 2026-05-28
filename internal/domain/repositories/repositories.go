@@ -19,6 +19,7 @@ type ProjectRepository interface {
 type TagRepository interface {
 	List() ([]entities.Tag, error)
 	GetByNames(names []string) ([]entities.Tag, error)
+	GetBySlugs(slugs []string) ([]entities.Tag, error)
 	Create(tag *entities.Tag) error
 }
 
