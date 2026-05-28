@@ -76,7 +76,7 @@ func main() {
 		Uploads: handlers.NewUploadHandler(uploadUsecase),
 	}
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{UnescapePath: true})
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.CORS.AllowOrigins,
 		AllowCredentials: true,
