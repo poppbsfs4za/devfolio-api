@@ -155,19 +155,26 @@ flowchart LR
     CF[Cloudflare DNS]
     FE[Cloud Run<br/>Next.js Frontend]
     BE[Cloud Run<br/>Go Fiber API]
-    DB[(Cloud SQL<br/>PostgreSQL)]
+    SQL[(Cloud SQL<br/>PostgreSQL)]
     GCS[Google Cloud Storage<br/>Uploads]
+    SM[Secret Manager]
     AR[Artifact Registry<br/>Backend Image]
     GHA[GitHub Actions<br/>CI/CD]
-    SM[Secret Manager]
+    OBS[Cloud Logging / Monitoring<br/>Observability & Alerts]
 
     U --> CF --> FE
     FE --> BE
-    BE --> DB
+
+    BE --> SQL
     BE --> GCS
     BE --> SM
+
     GHA --> AR
     AR --> BE
+
+    FE -. logs / metrics .-> OBS
+    BE -. logs / metrics .-> OBS
+    SQL -. metrics .-> OBS
 ```
 
 ---
