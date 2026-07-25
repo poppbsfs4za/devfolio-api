@@ -3,6 +3,7 @@ package router
 import (
 	"os"
 
+	"github.com/example/devfolio-api/internal/database"
 	"github.com/example/devfolio-api/internal/delivery/http/handlers"
 	"github.com/example/devfolio-api/internal/delivery/http/middleware"
 	"github.com/gofiber/fiber/v2"
@@ -19,7 +20,7 @@ type Handlers struct {
 	Uploads *handlers.UploadHandler
 }
 
-func Setup(app *fiber.App, h Handlers, jwtSecret string) {
+func Setup(app *fiber.App, h Handlers, jwtSecret string, dbStatus *database.Status) {
 	if os.Getenv("APP_ENV") != "production" {
 		app.Get("/swagger/*", fiberSwagger.WrapHandler)
 	}
@@ -29,7 +30,20 @@ func Setup(app *fiber.App, h Handlers, jwtSecret string) {
 
 	api := app.Group("/api/v1")
 
+	// Liveness: process is up, no DB dependency. Registered before the DB
+	// guard below so it is never short-circuited by it.
 	api.Get("/health", h.Health.Health)
+	api.Get("/healthz", h.Health.Health)
+
+	// Readiness: pings the database and reports 503 if unreachable.
+	api.Get("/ready", h.Health.Ready)
+	api.Get("/readyz", h.Health.Ready)
+
+	// Everything registered from here on touches the database - short-circuit
+	// with a structured 503 if the connection is unavailable instead of
+	// letting requests fail deeper in the stack.
+	api.Use(middleware.RequireDB(dbStatus))
+
 	api.Post("/auth/login", h.Auth.Login)
 	api.Post("/auth/logout", h.Auth.Logout)
 

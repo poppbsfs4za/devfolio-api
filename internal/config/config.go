@@ -35,6 +35,18 @@ type DBConfig struct {
 	Name     string
 	SSLMode  string
 	TimeZone string
+	// DatabaseURL, when set, is used as-is for the connection DSN (e.g. Neon's
+	// "postgres://user:pass@host/db?sslmode=require" connection string) and
+	// takes priority over the discrete Host/Port/User/... fields below.
+	DatabaseURL string
+
+	// Connection pool tuning - kept conservative by default since this project
+	// runs against a Neon free-tier Postgres with a small compute/connection
+	// allowance. See internal/database/postgres.go for where these are applied.
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime int // minutes
+	ConnMaxIdleTime int // minutes
 }
 
 type JWTConfig struct {
@@ -76,13 +88,21 @@ func Load() *Config {
 			AutoMigrate:  getEnvAsBool("AUTO_MIGRATE", true),
 		},
 		DB: DBConfig{
-			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnv("DB_PORT", "5432"),
-			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", "postgres"),
-			Name:     getEnv("DB_NAME", "devfolio"),
-			SSLMode:  getEnv("DB_SSLMODE", "disable"),
-			TimeZone: getEnv("DB_TIMEZONE", "Asia/Bangkok"),
+			Host:        getEnv("DB_HOST", "localhost"),
+			Port:        getEnv("DB_PORT", "5432"),
+			User:        getEnv("DB_USER", "postgres"),
+			Password:    getEnv("DB_PASSWORD", "postgres"),
+			Name:        getEnv("DB_NAME", "devfolio"),
+			SSLMode:     getEnv("DB_SSLMODE", "disable"),
+			TimeZone:    getEnv("DB_TIMEZONE", "Asia/Bangkok"),
+			DatabaseURL: getEnv("DATABASE_URL", ""),
+
+			// Conservative pool sized for Neon's free-tier compute/connection
+			// limits on a low-traffic personal site. Override via env if needed.
+			MaxOpenConns:    getEnvAsInt("DB_MAX_OPEN_CONNS", 4),
+			MaxIdleConns:    getEnvAsInt("DB_MAX_IDLE_CONNS", 2),
+			ConnMaxLifetime: getEnvAsInt("DB_CONN_MAX_LIFETIME_MIN", 30),
+			ConnMaxIdleTime: getEnvAsInt("DB_CONN_MAX_IDLE_TIME_MIN", 5),
 		},
 		JWT: JWTConfig{
 			Secret:         getEnv("JWT_SECRET", "super-secret-change-me"),
