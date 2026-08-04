@@ -11,7 +11,7 @@ This project was built to support a real portfolio/blog use case while also serv
 - Frontend: `https://kraiwit.dev`
 - Frontend hosting: Google Cloud Run
 - Backend hosting: Google Cloud Run
-- Database: Google Cloud SQL for PostgreSQL
+- Database: Neon (serverless PostgreSQL) — previously Google Cloud SQL, migrated over
 - Upload storage: Google Cloud Storage
 - Container registry: Google Artifact Registry
 - Secrets: Google Secret Manager
@@ -34,14 +34,14 @@ This project was built to support a real portfolio/blog use case while also serv
 ### Database
 
 - PostgreSQL
-- Cloud SQL for PostgreSQL
+- Neon (serverless Postgres, autoscaling/autosuspend compute)
 - golang-migrate for schema migrations
 
 ### Infrastructure / DevOps
 
 - Docker
 - Google Cloud Run
-- Google Cloud SQL
+- Neon
 - Google Cloud Storage
 - Google Secret Manager
 - Google Artifact Registry
@@ -138,7 +138,7 @@ Frontend Cloud Run
     |
 Backend Cloud Run
     |
-Cloud SQL PostgreSQL
+Neon PostgreSQL (serverless)
 
 Backend Cloud Run
     |
@@ -155,7 +155,7 @@ flowchart LR
     CF[Cloudflare DNS]
     FE[Cloud Run<br/>Next.js Frontend]
     BE[Cloud Run<br/>Go Fiber API]
-    SQL[(Cloud SQL<br/>PostgreSQL)]
+    SQL[(Neon<br/>Serverless PostgreSQL)]
     GCS[Google Cloud Storage<br/>Uploads]
     SM[Secret Manager]
     AR[Artifact Registry<br/>Backend Image]
@@ -188,12 +188,8 @@ The backend is deployed on Google Cloud Run.
 - Cloud Run service: `devfolio-api-cr`
 - Region: `us-central1`
 - Runtime service account: `devfolio-backend-run`
-- Database: Cloud SQL PostgreSQL
-- Cloud SQL connection name:
-
-```text
-famous-crossing-351110:us-central1:devfolio-postgres
-```
+- Database: Neon (serverless PostgreSQL), accessed over the public internet via the pooled connection endpoint (no Cloud SQL Unix socket, no VPC connector needed)
+- Neon project: `devfolio` (org `Kraiwit`), branch `production`
 
 ### Cloud Run Settings
 
@@ -216,13 +212,6 @@ Authentication: Allow unauthenticated
 ```env
 APP_ENV=production
 APP_PORT=8080
-
-DB_HOST=/cloudsql/famous-crossing-351110:us-central1:devfolio-postgres
-DB_PORT=5432
-DB_USER=postgres
-DB_NAME=devfolio
-DB_SSLMODE=disable
-DB_TIMEZONE=Asia/Bangkok
 AUTO_MIGRATE=false
 
 ADMIN_EMAIL=admin_kraiwit@gmail.com
@@ -232,12 +221,22 @@ GCS_BUCKET_NAME=kraiwit-devfolio-uploads
 GCS_PUBLIC_BASE_URL=https://storage.googleapis.com/kraiwit-devfolio-uploads
 ```
 
+Production connects to Neon using discrete `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_NAME`/`DB_SSLMODE` env vars, **not** a single `DATABASE_URL` secret. (A single-`DATABASE_URL`-secret approach was tried first but broke: the Neon password contains characters that aren't safe unescaped inside a `postgresql://` URI, which made the driver silently fall back to an empty/default DSN instead of failing loudly. Discrete fields avoid that URI-parsing problem entirely.) `DATABASE_URL` is still supported by `buildDSN` in `internal/database/postgres.go` and takes priority when set, but it is left unset in production.
+
+```env
+DB_HOST=ep-round-king-ajnprccc-pooler.c-3.us-east-2.aws.neon.tech
+DB_PORT=5432
+DB_USER=neondb_owner
+DB_NAME=neondb
+DB_SSLMODE=require
+```
+
 ### Secret Environment Variables
 
 These values are stored in Google Secret Manager and exposed to Cloud Run as environment variables.
 
 ```env
-DB_PASSWORD=devfolio-db-password:latest
+DB_PASSWORD=Neo_PG_Password:latest
 JWT_SECRET=devfolio-jwt-secret:latest
 ADMIN_PASSWORD=devfolio-admin-password:latest
 ```
@@ -253,7 +252,7 @@ This project uses Google Secret Manager for sensitive runtime values.
 Current secrets:
 
 ```text
-devfolio-db-password
+Neo_PG_Password
 devfolio-jwt-secret
 devfolio-admin-password
 ```
@@ -272,65 +271,61 @@ Secret Manager Secret Accessor
 
 ---
 
-## Cloud SQL
+## Database (Neon)
 
-The production database runs on Cloud SQL for PostgreSQL.
+The production database runs on [Neon](https://neon.tech) — serverless PostgreSQL with autoscaling compute and autosuspend (scale-to-zero) after 5 minutes of inactivity on the Free plan.
 
-### Instance
-
-```text
-devfolio-postgres
-```
-
-### Database
+### Project
 
 ```text
-devfolio
-```
-
-### Connection Name
-
-```text
-famous-crossing-351110:us-central1:devfolio-postgres
+Org: Kraiwit
+Project: devfolio
+Branch: production
+Database: neondb
 ```
 
 ### Connecting from Cloud Run
 
-Cloud Run connects to Cloud SQL using the Cloud SQL connection integration.
+Cloud Run connects directly over the internet using Neon's **pooled** connection endpoint (hostname ending in `-pooler`), which fronts PgBouncer and copes much better with Cloud Run's many short-lived serverless connections than a direct (unpooled) endpoint would. There is no Cloud SQL-style Unix socket or VPC connector involved. The connection is configured as discrete fields rather than a single connection-string secret:
 
-The application uses:
-
-```env
-DB_HOST=/cloudsql/famous-crossing-351110:us-central1:devfolio-postgres
+```text
+DB_HOST=ep-round-king-ajnprccc-pooler.c-3.us-east-2.aws.neon.tech
 DB_PORT=5432
+DB_USER=neondb_owner
+DB_NAME=neondb
+DB_SSLMODE=require
+DB_PASSWORD=<from Secret Manager secret Neo_PG_Password>
 ```
+
+Discrete fields are used instead of a single `DATABASE_URL` because the Neon password contains characters (e.g. `+`, `/`, `=`) that aren't safe unescaped inside a `postgresql://user:password@host/db` URI — when it broke, the driver didn't error loudly, it silently fell back to an empty/default DSN (`host=/tmp`, `user=root`, empty dbname), which took a while to diagnose. Get the exact current host/user from the Neon console: project `devfolio` → Connect → make sure **Connection pooling** is toggled on.
+
+### Free plan limits to watch
+
+- **100 compute hours (CU-hrs) per month.** This is wall-clock active compute time, not query count — if something pings the API/DB often enough to prevent the 5-minute autosuspend from ever completing, the compute effectively never sleeps and the monthly allowance can be exhausted in days rather than the full month. Check Neon's Monitoring tab periodically for a "should be spiky, not a flat line" sanity check.
+- Once the monthly allowance is used up, compute stops starting until the next billing cycle (or until the plan is upgraded) — the API will run in degraded mode (see `db_guard.go` / `RequireDB`) rather than crash, but every DB-backed route returns 503 until then.
 
 ---
 
 ## Connecting to Database from Local Machine
 
-Recommended method: Cloud SQL Auth Proxy.
-
-### Start Cloud SQL Auth Proxy
+Connect directly with `psql` (or any Postgres client) using the Neon connection string — no proxy needed, since Neon is reachable over the public internet with TLS (`sslmode=require`):
 
 ```bash
-cloud-sql-proxy famous-crossing-351110:us-central1:devfolio-postgres --port 5433
+psql "postgresql://neondb_owner:<password>@ep-round-king-ajnprccc-pooler.c-3.us-east-2.aws.neon.tech/neondb?sslmode=require"
 ```
 
-Keep this terminal open while using DBeaver or another database client.
-
-### DBeaver Connection
+### DBeaver / GUI client connection
 
 ```text
-Host: localhost
-Port: 5433
-Database: devfolio
-Username: postgres
-Password: <DB_PASSWORD>
-SSL: disable
+Host: ep-round-king-ajnprccc-pooler.c-3.us-east-2.aws.neon.tech
+Port: 5432
+Database: neondb
+Username: neondb_owner
+Password: <from Neon console>
+SSL mode: require
 ```
 
-This method does not require adding local public IP addresses to Cloud SQL Authorized Networks.
+Prefer the **unpooled** endpoint (no `-pooler` suffix, shown in Neon's Connect dialog under "Direct connection") for one-off admin/GUI sessions, and reserve the pooled endpoint for the running Cloud Run service.
 
 ---
 
@@ -536,10 +531,9 @@ Deployment steps:
 3. Build Docker image
 4. Push image to Artifact Registry
 5. Deploy backend to Cloud Run
-6. Attach Cloud SQL connection
-7. Configure runtime environment variables
-8. Mount secrets from Secret Manager
-9. Run post-deployment health check
+6. Configure runtime environment variables (including discrete `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_NAME`/`DB_SSLMODE` for Neon)
+7. Mount secrets from Secret Manager, including `DB_PASSWORD` (Neon password, secret `Neo_PG_Password`)
+8. Run post-deployment health check
 
 ### Deployment Target
 
@@ -606,13 +600,12 @@ Expected response:
 
 ## Security Notes
 
-- Database password is stored in Secret Manager
+- The database host/user/name/sslmode are plain env vars; only the password is a secret, stored in Secret Manager as `DB_PASSWORD` (secret `Neo_PG_Password`)
 - JWT secret is stored in Secret Manager
 - Admin password is stored in Secret Manager
 - Cloud Run uses a dedicated runtime service account
 - GitHub Actions uses Workload Identity Federation
-- Cloud SQL should be accessed locally through Cloud SQL Auth Proxy
-- Avoid opening Cloud SQL public access with `0.0.0.0/0`
+- Neon connections always use `sslmode=require`; there is no IP-allowlist on the Free plan, so treat the password itself as the sole secret boundary — rotate the Neon password immediately if it's ever exposed
 - Do not commit `.env` or real secret values
 
 ---
@@ -642,6 +635,30 @@ The migration included:
 - Updating GitHub Actions deployment from VM SSH to Cloud Run
 - Keeping GCS as the upload storage layer
 
+### Cloud SQL → Neon (August 2026)
+
+The database was migrated a second time, from Cloud SQL to Neon:
+
+```text
+Before:
+Frontend Cloud Run → Backend Cloud Run → Cloud SQL PostgreSQL
+
+After:
+Frontend Cloud Run → Backend Cloud Run → Neon PostgreSQL (serverless)
+```
+
+The actual data migration (schema + all rows: `users`, `profiles`, `projects`, `tags`, `posts`, `post_tags`) had already been done by hand earlier, directly against Neon's `devfolio` project (branch `production`, database `neondb`) — the Cloud SQL instance (`devfolio-postgres`) was deleted afterwards and no longer exists. What was actually out of sync was the **deploy pipeline**, which still had `deploy.yml` configured to attach a Cloud SQL instance that no longer existed — every Cloud Run revision was failing to connect at startup (`Internal error looking up Cloud SQL instance ...`) and running in degraded mode (`db_available=false`, all DB-backed routes returning 503) until this was fixed.
+
+The fix included:
+
+- Removing the `--set-cloudsql-instances` Cloud SQL connection attachment from the Cloud Run deploy step (replaced with `--clear-cloudsql-instances`) and dropping the old Cloud SQL env vars/secret
+- Pointing Cloud Run at Neon using discrete `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_NAME`/`DB_SSLMODE` env vars plus a `DB_PASSWORD` secret (reusing the existing but previously-unused `Neo_PG_Password` secret in Secret Manager, after resetting the Neon password and adding a new secret version)
+- A single-`DATABASE_URL`-secret approach was tried first and abandoned: it produced a connection error where the driver fell back to an empty/default DSN (`host=/tmp`, `user=root`, empty dbname) rather than a clear auth failure, traced to unescaped special characters (`+`, `/`, `=`) in the freshly-reset Neon password breaking `postgresql://` URI parsing. Discrete fields sidestep URI parsing entirely.
+- No application code changes were needed — `buildDSN` in `internal/database/postgres.go` already supported both `DATABASE_URL` and the discrete fields
+- No data export/import was needed — the data was already on Neon
+
+Separately: this same Neon project (`devfolio`) had its monthly 100 CU-hr compute allowance exhausted within the first few days of the billing cycle, before this fix — traced to the compute apparently never getting a full 5-minute idle window to autosuspend (Monitoring showed continuous usage rather than the expected spiky pattern). Even with the deploy pipeline fixed, Cloud Run will keep hitting 503s until the Neon compute allowance resets (next billing cycle) or the plan is upgraded — fixing the pipeline alone does not restore live service while the quota is exhausted. Keep an eye on Neon's Monitoring tab going forward for that "flat line, never suspends" pattern.
+
 ---
 
 ## Operational Notes
@@ -655,18 +672,19 @@ gcloud run services logs read devfolio-api-cr \
   --limit 100
 ```
 
-### Create Cloud SQL Backup
+### Back Up the Neon Database
+
+Neon keeps continuous point-in-time restore history automatically (retention depends on plan), but for an explicit snapshot before risky changes, create a child branch (instant, copy-on-write) from the Neon console or CLI:
 
 ```bash
-gcloud sql backups create \
-  --instance=devfolio-postgres \
-  --project famous-crossing-351110
+neonctl branches create --project-id <project-id> --name backup-$(date +%Y%m%d)
 ```
 
-### Start Cloud SQL Proxy Locally
+Or take a manual `pg_dump` for an offline copy:
 
 ```bash
-cloud-sql-proxy famous-crossing-351110:us-central1:devfolio-postgres --port 5433
+pg_dump "postgresql://neondb_owner:<password>@ep-round-king-ajnprccc-pooler.c-3.us-east-2.aws.neon.tech/neondb?sslmode=require" \
+  --format=custom --file=devfolio-backup-$(date +%Y%m%d).dump
 ```
 
 ### Test Production API
@@ -695,7 +713,7 @@ curl -i https://devfolio-api-cr-294009483204.us-central1.run.app/api/v1/posts
 - Add automated database backup policy review
 - Add rollback strategy using Cloud Run revisions
 - Add more unit and integration tests
-- Add least-privilege database user instead of using `postgres`
+- Add alerting on Neon compute-hour usage so a runaway consumer is caught early, not after the monthly quota is already exhausted
 - Clean up legacy local upload URLs
 - Remove old VM infrastructure after migration is stable
 
@@ -710,7 +728,7 @@ The goal was not only to build API features, but also to understand how these pa
 - Backend API design
 - Clean Architecture in Go
 - PostgreSQL database design
-- Cloud SQL migration
+- Cloud SQL and Neon (serverless Postgres) migrations
 - Object storage for uploads
 - Secret management
 - Container deployment

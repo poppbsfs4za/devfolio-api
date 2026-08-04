@@ -69,8 +69,9 @@ All configuration is env-based. Copy `.env` and adjust; defaults suit local Dock
 | `JWT_SECRET` | `super-secret-change-me` | **Change in production** |
 | `GCS_BUCKET_NAME` | *(empty)* | Leave empty to use local storage (`UPLOAD_DIR`) |
 | `CORS_ALLOW_ORIGINS` | `http://localhost:3000` | Comma-separated list |
+| `DATABASE_URL` | *(empty)* | Full Postgres DSN; when set, takes priority over `DB_HOST`/`DB_PORT`/etc. Not used in production — see note below. |
 
-Production secrets (`DB_PASSWORD`, `JWT_SECRET`, `ADMIN_PASSWORD`) are pulled from Google Secret Manager by Cloud Run at runtime.
+Production uses the discrete `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_NAME`/`DB_SSLMODE` env vars (pointed at Neon) plus a `DB_PASSWORD` secret, **not** `DATABASE_URL`. A single-`DATABASE_URL`-secret approach was tried first but broke because the Neon password contains characters that aren't safe unescaped inside a `postgresql://` URI, which made the driver silently fall back to an empty/default DSN. Production secrets (`DB_PASSWORD`, `JWT_SECRET`, `ADMIN_PASSWORD`) are pulled from Google Secret Manager by Cloud Run at runtime; `DB_PASSWORD` maps to the Secret Manager secret `Neo_PG_Password`.
 
 ## Database & Migrations
 
@@ -97,5 +98,5 @@ Admin user is seeded on every startup — idempotent, only creates if absent (se
 ## CI/CD
 
 - **CI** (`.github/workflows/ci.yml`): runs on every push; spins up Postgres service, runs migrations, generates Swagger, runs tests, builds binary.
-- **Deploy** (`.github/workflows/deploy.yml`): triggers after CI passes on `main`; builds Docker image, pushes to Artifact Registry (`us-central1`), deploys to Cloud Run service `devfolio-api-cr` in GCP project `famous-crossing-351110`.
+- **Deploy** (`.github/workflows/deploy.yml`): triggers after CI passes on `main`; builds Docker image, pushes to Artifact Registry (`us-central1`), deploys to Cloud Run service `devfolio-api-cr` in GCP project `famous-crossing-351110`. Production database is **Neon** (serverless Postgres), connected via discrete `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_NAME`/`DB_SSLMODE` env vars plus the `DB_PASSWORD` secret (`Neo_PG_Password`) — not Cloud SQL, and not a single `DATABASE_URL` secret.
 - Authentication to GCP uses **Workload Identity Federation** — no long-lived service account keys in CI.
